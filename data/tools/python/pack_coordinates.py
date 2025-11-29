@@ -137,7 +137,7 @@ def main():
     ap = argparse.ArgumentParser(description="Pack LAMMPS lammpstrj coordinates into a single HDF5 (group per seed).")
     ap.add_argument("--dataset", "-d", required=True, help="Dataset directory containing <seed>/dump/dump*.lammpstrj")
     ap.add_argument("--seeds-file", "-s", required=True, help="Path to seed list file used for the dataset")
-    ap.add_argument("--output", "-o", default="coordinates.h5", help="Output HDF5 filename (created inside --dataset)")
+    ap.add_argument("--output", "-o", default="coordinates.h5", help="Output HDF5 filename (will be written to data/coordinates_h5/<dataset>/<output>)")
     ap.add_argument("--phase", "-p", choices=["solid","liquid"], help="Phase metadata to attach")
     ap.add_argument("--temp", "-t", type=float, help="Temperature in K to attach as metadata")
     ap.add_argument("--skip-frames", "-k", type=int, default=200, help="Frames to skip at start (equilibration)")
@@ -145,8 +145,37 @@ def main():
     ap.add_argument("--no-compress", action="store_true", help="Disable compression")
     args = ap.parse_args()
 
+    # Resolve dataset directory to absolute path
+    dataset_dir = os.path.abspath(args.dataset)
+    
+    # Extract dataset name (last component of dataset directory path)
+    dataset_name = os.path.basename(dataset_dir.rstrip(os.sep))
+    
+    # Find repo root (directory containing data/)
+    # Try to find data/ by going up from dataset directory
+    current = dataset_dir
+    repo_root = None
+    while current != os.path.dirname(current):  # Stop at root
+        data_dir = os.path.join(current, "data")
+        if os.path.isdir(data_dir):
+            repo_root = current
+            break
+        current = os.path.dirname(current)
+    
+    if repo_root is None:
+        # Fallback: if we can't find repo root, use original output path
+        print(f"[WARN] Could not find repo root (directory containing data/), using original output path", file=sys.stderr)
+        output_path = args.output
+        if not os.path.isabs(output_path):
+            output_path = os.path.join(dataset_dir, output_path)
+    else:
+        # Construct new output path: data/coordinates_h5/<dataset>/<output>
+        coordinates_h5_dir = os.path.join(repo_root, "data", "coordinates_h5", dataset_name)
+        os.makedirs(coordinates_h5_dir, exist_ok=True)
+        output_filename = os.path.basename(args.output)
+        output_path = os.path.join(coordinates_h5_dir, output_filename)
+    
     seeds = read_seed_list(args.seeds_file)
-    output_path = args.output
     compression = None if args.no_compress else "lzf"
     print(f"[INFO] Output file: {output_path}", file=sys.stderr)
     pack_dataset_to_h5(args.dataset, seeds, output_path, phase=args.phase, temperature=args.temp, compression=compression, chunk=args.chunk, skip_frames=args.skip_frames)

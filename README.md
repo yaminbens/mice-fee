@@ -29,15 +29,15 @@ Build *solid + liquid* train/val with HDF5:
 ./data/bin/run_all.sh -D m_Al933 -t 933 -n 6 -e Al
 ```
 
-Build a single phase + seeds, and write `coordinates.h5` inside the dataset:
+Build a single phase + seeds, and write `coordinates.h5` to `data/coordinates_h5/<dataset>/`:
 ```bash
 ./data/bin/run_phase.sh -d m_Na365_L_train -p liquid -t 365 -n 6 -s data/seeds/seeds_train -o coordinates.h5 -k 200
 ./data/bin/run_phase.sh -d m_Al933_S_train -p solid -t 933 -n 6 -s data/seeds/seeds_train -o coordinates.h5 -k 200 -e Al
 ```
 
 - `-k` controls how many initial frames to skip (equilibration).
-- The HDF5 file has a **group per seed** with a chunked, resizable dataset:
-  `/<seed>/coordinates` shaped `(frames, 1024, 3)` in `float32`, default compression `lzf`.
+- The HDF5 file is written to `data/coordinates_h5/<dataset>/coordinates.h5` and has a **group per seed** with a chunked, resizable dataset:
+  `/<seed>/positions` shaped `(frames, 1024, 3)` in `float32`, default compression `lzf`.
 
 ### Notes
 
@@ -46,6 +46,35 @@ Build a single phase + seeds, and write `coordinates.h5` inside the dataset:
 - Element-specific plumed files (e.g., `plumedNa.dat`, `plumedAl.dat`) are copied from `data/sim_templates/<element>/` into each dataset folder.
 - Seeds files can be specified relative to `data/` directory or as absolute paths.
 - For parallel seeds: `export XARGS_P="-P 2"` before running.
+
+### Direct Usage of pack_coordinates.py
+
+You can also use `pack_coordinates.py` directly to pack LAMMPS trajectories into HDF5 format:
+
+```bash
+python data/tools/python/pack_coordinates.py \
+  --dataset data/simulation/m_Na365_S_train \
+  --seeds-file data/seeds/seeds_train \
+  --output coordinates.h5 \
+  --phase solid \
+  --temp 365 \
+  --skip-frames 200
+```
+
+**Arguments:**
+- `--dataset`, `-d`: Dataset directory containing `<seed>/dump/dump*.lammpstrj` files (required)
+- `--seeds-file`, `-s`: Path to seed list file (required)
+- `--output`, `-o`: Output HDF5 filename (default: `coordinates.h5`)
+  - The output file is automatically written to `data/coordinates_h5/<dataset>/<output>`
+- `--phase`, `-p`: Phase metadata (`solid` or `liquid`)
+- `--temp`, `-t`: Temperature in Kelvin (attached as metadata)
+- `--skip-frames`, `-k`: Number of initial frames to skip for equilibration (default: 200)
+- `--chunk`: Chunk length in frames for HDF5 storage (default: 128)
+- `--no-compress`: Disable compression (default: uses `lzf` compression)
+
+**Note:** The script automatically detects the repository root and redirects the output to `data/coordinates_h5/<dataset>/<output>`, where `<dataset>` is extracted from the dataset directory name.
+
+### Voxelization with make_dataset.py
 
 ```bash
 python data/tools/python/make_dataset.py \
@@ -58,7 +87,7 @@ python data/tools/python/make_dataset.py \
 ```
 
 ```bash
-# python data/tools/python/make_dataset.py --h5 data/simulation/m_Na365_L_train/coordinates.h5 --element Na --bins 32 --bf 0.3 --outdir coordinates
+# python data/tools/python/make_dataset.py --h5 data/coordinates_h5/m_Na365_L_train/coordinates.h5 --element Na --bins 32 --bf 0.3 --outdir coordinates
 ```
 
 ## Training The Neural Network
