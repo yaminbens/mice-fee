@@ -61,6 +61,14 @@ def parse_dump_frames(path, skip_frames=0):
 
 def pack_dataset_to_h5(dataset_dir, seeds, output, phase=None, temperature=None, compression="lzf", chunk=128, skip_frames=200):
     import h5py
+    total_seeds = len(seeds)
+    print(f"[INFO] Processing {total_seeds} seed(s)...", file=sys.stderr)
+    
+    # Ensure output directory exists
+    output_dir = os.path.dirname(output)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+    
     with h5py.File(output, "w") as h5:
         h5.attrs["format"] = "positions"
         if phase is not None:
@@ -68,10 +76,11 @@ def pack_dataset_to_h5(dataset_dir, seeds, output, phase=None, temperature=None,
         if temperature is not None:
             h5.attrs["temperature_K"] = float(temperature)
 
-        for seed in seeds:
+        for seed_idx, seed in enumerate(seeds, 1):
             seed = seed.strip()
             if not seed:
                 continue
+            print(f"[{seed_idx}/{total_seeds}] Processing seed: {seed}", file=sys.stderr)
             seed_dir = os.path.join(dataset_dir, seed)
             import glob
             dump_glob = glob.glob(os.path.join(seed_dir, "dump", "dump*.lammpstrj"))
@@ -104,20 +113,31 @@ def pack_dataset_to_h5(dataset_dir, seeds, output, phase=None, temperature=None,
                 dset.resize((frames_written + 1, n_atoms, 3))
                 dset[frames_written, :, :] = pos
                 frames_written += 1
+                
+                # Print progress every 1000 frames
+                # if frames_written - last_progress_frame >= 1000:
+                #     print(f"  [{seed_idx}/{total_seeds}] {seed}: {frames_written} frames written...", file=sys.stderr)
+                #     last_progress_frame = frames_written
 
             grp.attrs["frames"] = frames_written
             if frames_written == 0:
                 print(f"[WARN] No frames written for seed {seed} (after skipping)", file=sys.stderr)
+            else:
+                print(f"  [{seed_idx}/{total_seeds}] {seed}: {frames_written} frames written", file=sys.stderr)
 
 def read_seed_list(path):
+    import os
+    print(f"Reading seeds from {path}", file=sys.stderr)
     with open(path, "r", encoding="utf-8") as f:
-        return [ln.strip() for ln in f if ln.strip()]
+        seeds = [ln.strip() for ln in f if ln.strip()]
+    print(f"Found {len(seeds)} seed(s) in file", file=sys.stderr)
+    return seeds
 
 def main():
-    ap = argparse.ArgumentParser(description="Pack LAMMPS lammpstrj positions into a single HDF5 (group per seed).")
+    ap = argparse.ArgumentParser(description="Pack LAMMPS lammpstrj coordinates into a single HDF5 (group per seed).")
     ap.add_argument("--dataset", "-d", required=True, help="Dataset directory containing <seed>/dump/dump*.lammpstrj")
     ap.add_argument("--seeds-file", "-s", required=True, help="Path to seed list file used for the dataset")
-    ap.add_argument("--output", "-o", default="positions.h5", help="Output HDF5 filename (created inside --dataset)")
+    ap.add_argument("--output", "-o", default="coordinates.h5", help="Output HDF5 filename (created inside --dataset)")
     ap.add_argument("--phase", "-p", choices=["solid","liquid"], help="Phase metadata to attach")
     ap.add_argument("--temp", "-t", type=float, help="Temperature in K to attach as metadata")
     ap.add_argument("--skip-frames", "-k", type=int, default=200, help="Frames to skip at start (equilibration)")
@@ -126,10 +146,11 @@ def main():
     args = ap.parse_args()
 
     seeds = read_seed_list(args.seeds_file)
-    output_path = os.path.join(args.dataset, args.output)
+    output_path = args.output
     compression = None if args.no_compress else "lzf"
+    print(f"[INFO] Output file: {output_path}", file=sys.stderr)
     pack_dataset_to_h5(args.dataset, seeds, output_path, phase=args.phase, temperature=args.temp, compression=compression, chunk=args.chunk, skip_frames=args.skip_frames)
-    print(f"✔ Wrote {output_path}")
+    print(f"Wrote {output_path}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

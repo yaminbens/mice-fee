@@ -31,10 +31,10 @@ variable seed world ${seed}
 
 
 variable        side equal 8
-variable        numAtoms equal 1024
-variable        mass equal 22.98977
+variable        numAtoms equal 2048
+variable        mass equal 26.981539
 units metal
-lattice 	bcc 4.228
+lattice 	fcc 4.05
 region          box block 0 \${side} 0 \${side} 0 \${side}
 atom_style full
 create_box      1 box
@@ -43,7 +43,7 @@ create_atoms    1 box
 mass            1 \${mass}
 change_box      all triclinic
 pair_style  eam/fs
-pair_coeff  * * ../../Na_MendelevM_2014.eam.fs Na
+pair_coeff  * * ../../../potentials/Al1.eam.fs Al
 variable        out_freq equal 100
 variable        dump_freq equal 2500
 variable        restart_freq equal 200000
@@ -84,7 +84,7 @@ unfix           2
 #                 xz 0.0 0.0 \${pressureDamp} &
 #                 couple xyz
 
-fix             1 all plumed plumedfile ../plumed.dat outfile plumed/plumed\${temperature}.out
+fix             1 all plumed plumedfile ../plumedAl.dat outfile plumed/plumed\${temperature}.out
 fix             2 all nph iso \${pressure} \${pressure} \${pressureDamp}
 fix             3 all temp/csvr \${temperature} \${temperature} \${tempDamp} \${seed}
 fix             4 all momentum 10000 linear 1 1 1 angular
